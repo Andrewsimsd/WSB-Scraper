@@ -52,7 +52,7 @@ def get_ticker_count():
     print(submission.title)
     for comment in iter_top_level(submission.comments): 
         # set how many comments you want to search
-        if counter == 100:
+        if counter == 1000:
             return tickers
         for word in comment.body.split():
             if word == word.upper() and word in ticker_set and word not in flagged_words:
