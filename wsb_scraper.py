@@ -1,9 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Fri Feb 12 14:49:09 2021
-
-@author: andre
-"""
 
 import praw
 from praw.models import MoreComments
@@ -33,49 +28,84 @@ def iter_top_level(comments):
         else:
             yield top_level_comment
 
-def get_ticker_count():
+
+def get_ticker_count(date, url):
     reddit = praw.Reddit(client_id = "bbHD9kqIv2nmLQ",
                          client_secret = "vijXx26W5qgMyx2BbWA4tihwHjdIWg",
                          user_agent = "windows:scraper:0.1 (by u/0x00000194)",
                          check_for_async = False)
-    counter = 0
     
     # People may use use words that happen to be real ticker names
-    flagged_words = ["YOLO", "PUMP", "RH", "EOD", "IPO", "ATH", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", 
-        "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+    flagged_words = ("YOLO", "PUMP", "RH", "EOD", "IPO", "ATH", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", 
+        "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
+    positive_disposition = ('buy', 'leap', 'soar', 'long', 'skyrocket', 'good', 'awesome', 'genius', 'smart', 'rich')
+    negative_disposition = ('sell', 'crash', 'short', 'bad', 'awful', 'horrible', 'stupid', 'retarded')
     ticker_set = get_nasdaq_tickers()
-    # tickers = {}
-    tickers = pd.DataFrame(columns = ('ticker', 'mentions'))
+    tickers = pd.DataFrame(columns = ('mentions', 'disposition'))
     # Enter the url of daily discussion post
-    url = "https://www.reddit.com/r/wallstreetbets/comments/li8ul6/daily_discussion_thread_for_february_12_2021/"
     submission = reddit.submission(url=url)
     print(submission.title)
+    counter = 0
     for comment in iter_top_level(submission.comments): 
         # set how many comments you want to search
-        if counter == 1000:
+        if counter == 100:
+            tickers = tickers.sort_values('mentions', ascending = False)
             return tickers
+        #see if comment contains a ticker
         for word in comment.body.split():
+            #if word is a valid ticker
             if word == word.upper() and word in ticker_set and word not in flagged_words:
+                #if ticker not seen before
                 if word not in tickers.index.values:
-                    tickers.loc[word] = 1
+                    #create new index for ticker
+                    tickers = tickers.append(pd.Series(name=word, dtype = object))
+                    tickers.loc[word]['mentions'] = 1
                 else:
-                    tickers.loc[word] += 1
+                    tickers.loc[word]['mentions'] += 1     
+                #grade disposition
+                disposition = 0
+                for _word in comment.body.split():
+                    if _word.lower() in positive_disposition:
+                        disposition += 1
+                    elif _word.lower() in negative_disposition:
+                        disposition -= 1
+                #if disposition not initialized
+                if tickers.loc[word]['disposition'] is np.nan:
+                    tickers.loc[word]['disposition'] = disposition
+                else:
+                    tickers.loc[word]['disposition'] += disposition
         counter += 1
+    tickers = tickers.sort_values('mentions', ascending = False)
     return tickers
 
-def plot_ticker_count(tickers):
-    tickers = tickers.sort_values('mentions', ascending = False)
-    fig = plt.figure()
-    plt.bar(tickers.index.values, tickers['mentions'].values)
-    plt.xticks(rotation = 'vertical')
-    plt.title('Ticker mention count')
-    plt.xlabel('Ticker')
-    plt.ylabel('Times Mentioned')
+def plot_ticker_count(tickers, date, save_file_dir):
+    fig, axs = plt.subplots(2, figsize = (10, 10))
+    xmin = -0.5
+    xmax = len(tickers.index.values) - 0.5
+    fig.suptitle(f'Ticker Mention Count and Disposition\nDate: {date}')
+    axs[0].grid(zorder = 0)
+    axs[0].bar(tickers.index.values, tickers['mentions'].values, zorder = 3)
+    axs[0].set_xticklabels(tickers.index.values, rotation = 90)
+    # axs[0].set_xlabel('Ticker')
+    axs[0].set_ylabel('Times Mentioned')
+    axs[0].set_xlim(xmin, xmax)
+    
+    axs[1].grid(zorder = 0)
+    axs[1].bar(tickers.index.values, tickers['disposition'].values, zorder = 3)
+    axs[1].set_xticklabels(tickers.index.values, rotation = 90)
+    axs[1].set_xlabel('Ticker')
+    axs[1].set_ylabel('Disposition')
+    axs[1].hlines(0, xmin, xmax, color = 'k', lw = 3)
+    axs[1].set_xlim(xmin, xmax)
+    
+    save_path = save_file_dir / 'plots'
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'{date}_ticker_mentions.png', bbox_inches = 'tight')
+    plt.close()
     return fig
 
 
 def plot_ticker_change(tickers):
-    tickers = tickers.sort_values('mentions', ascending = False)
     fig = plt.figure()
     plt.bar(tickers.index.values, tickers['percent change'].values)
     plt.xticks(rotation = 'vertical')
@@ -107,12 +137,22 @@ def calc_change(tickers):
         
         
 def main():
-    save_file_dir = os.path.join(os.getcwd(), 'Artifacts')
-    pathlib.Path(save_file_dir).mkdir(parents=True, exist_ok=True)
-    tickers = get_ticker_count()
-    tickers = calc_change(tickers)
-    plot_ticker_count(tickers)
-    plot_ticker_change(tickers)
+    save_file_dir = pathlib.Path(os.getcwd(), 'Artifacts')
+    save_file_dir.mkdir(parents=True, exist_ok=True)
+    pages = {20210212: r'https://www.reddit.com/r/wallstreetbets/comments/li8ul6/daily_discussion_thread_for_february_12_2021/',
+             20210211: r'https://www.reddit.com/r/wallstreetbets/comments/lhifig/daily_discussion_thread_for_february_11_2021/',
+             20210210: r'https://www.reddit.com/r/wallstreetbets/comments/lgrc39/daily_discussion_thread_for_february_10_2021/',
+             20210209: r'https://www.reddit.com/r/wallstreetbets/comments/lg0h70/daily_discussion_thread_for_february_09_2021/',
+             20210208: r'https://www.reddit.com/r/wallstreetbets/comments/lf9huy/daily_discussion_thread_for_february_08_2021/'
+             }
+    for date, url in pages.items(): 
+        tickers = get_ticker_count(date, url)
+        # tickers = calc_change(tickers)
+        save_path = save_file_dir / 'csv files'
+        save_path.mkdir(parents=True, exist_ok=True)
+        tickers.to_csv(save_path / f'{date}_ticker_mentions.csv')
+        plot_ticker_count(tickers, date, save_file_dir)
+        # plot_ticker_change(tickers)
     
     
 if __name__ == "__main__":
