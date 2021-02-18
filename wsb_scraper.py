@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import os
 from iexfinance.stocks import Stock
+from iexfinance.stocks import get_historical_data
 
 # Creates a set of stock tickers in NASDAQ
 def get_nasdaq_tickers():
@@ -38,8 +39,8 @@ def get_ticker_count(date, url):
     # People may use use words that happen to be real ticker names
     flagged_words = ("YOLO", "PUMP", "RH", "EOD", "IPO", "ATH", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", 
         "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z")
-    positive_disposition = ('buy', 'leap', 'soar', 'long', 'skyrocket', 'good', 'awesome', 'genius', 'smart', 'rich')
-    negative_disposition = ('sell', 'crash', 'short', 'bad', 'awful', 'horrible', 'stupid', 'retarded')
+    positive_disposition = ('buy', 'buying', 'leap', 'soar', 'long', 'skyrocket', 'good', 'awesome', 'genius', 'smart', 'rich', 'gain', 'gains', 'leap', 'leaps', 'potential', 'jump', 'jump', 'hold', 'invest', 'investing', 'push', 'call', '🚀', 'moon', 'green', 'running', 'run', 'up', 'strong')
+    negative_disposition = ('sell', 'selling', 'crash', 'short', 'bad', 'awful', 'horrible', 'stupid', 'retarded', 'drop', 'dropped', 'rip', 'put', 'red', 'dumping', 'dump', 'down', 'weak')
     ticker_set = get_nasdaq_tickers()
     tickers = pd.DataFrame(columns = ('mentions', 'disposition'))
     # Enter the url of daily discussion post
@@ -48,7 +49,7 @@ def get_ticker_count(date, url):
     counter = 0
     for comment in iter_top_level(submission.comments): 
         # set how many comments you want to search
-        if counter == 100:
+        if counter == 1000:
             tickers = tickers.sort_values('mentions', ascending = False)
             return tickers
         #see if comment contains a ticker
@@ -139,7 +140,9 @@ def calc_change(tickers):
 def main():
     save_file_dir = pathlib.Path(os.getcwd(), 'Artifacts')
     save_file_dir.mkdir(parents=True, exist_ok=True)
-    pages = {20210212: r'https://www.reddit.com/r/wallstreetbets/comments/li8ul6/daily_discussion_thread_for_february_12_2021/',
+    pages = {20210217: r'https://www.reddit.com/r/wallstreetbets/comments/llrzit/daily_discussion_thread_for_february_17_2021/',
+             20210216: r'https://www.reddit.com/r/wallstreetbets/comments/ll1ir4/daily_discussion_thread_for_february_16_2021/',
+             20210212: r'https://www.reddit.com/r/wallstreetbets/comments/li8ul6/daily_discussion_thread_for_february_12_2021/',
              20210211: r'https://www.reddit.com/r/wallstreetbets/comments/lhifig/daily_discussion_thread_for_february_11_2021/',
              20210210: r'https://www.reddit.com/r/wallstreetbets/comments/lgrc39/daily_discussion_thread_for_february_10_2021/',
              20210209: r'https://www.reddit.com/r/wallstreetbets/comments/lg0h70/daily_discussion_thread_for_february_09_2021/',
