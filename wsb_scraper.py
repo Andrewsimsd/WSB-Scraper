@@ -53,6 +53,10 @@ def get_ticker_count(date, url):
         # set how many comments you want to search
         if counter == 1000:
             tickers = tickers.sort_values('mentions', ascending = False)
+            #adjust vader scores to percent
+            tickers.vader_positive = tickers.vader_positive/tickers.mentions
+            tickers.vader_negative = tickers.vader_negative/tickers.mentions
+            tickers.vader_neutral = tickers.vader_neutral/tickers.mentions
             return tickers
         tickers_present = []
         #see if comment contains a ticker
