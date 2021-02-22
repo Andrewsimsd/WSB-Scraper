@@ -10,6 +10,7 @@ import numpy as np
 import os
 from iexfinance.stocks import Stock
 from iexfinance.stocks import get_historical_data
+from nltk.sentiment import SentimentIntensityAnalyzer
 
 # Creates a set of stock tickers in NASDAQ
 def get_nasdaq_tickers():
@@ -31,6 +32,7 @@ def iter_top_level(comments):
 
 
 def get_ticker_count(date, url):
+    sia = SentimentIntensityAnalyzer()
     reddit = praw.Reddit(client_id = "bbHD9kqIv2nmLQ",
                          client_secret = "vijXx26W5qgMyx2BbWA4tihwHjdIWg",
                          user_agent = "windows:scraper:0.1 (by u/0x00000194)",
@@ -42,7 +44,7 @@ def get_ticker_count(date, url):
     positive_disposition = ('buy', 'buying', 'leap', 'soar', 'long', 'skyrocket', 'good', 'awesome', 'genius', 'smart', 'rich', 'gain', 'gains', 'leap', 'leaps', 'potential', 'jump', 'jump', 'hold', 'invest', 'investing', 'push', 'call', '🚀', 'moon', 'green', 'running', 'run', 'up', 'strong')
     negative_disposition = ('sell', 'selling', 'crash', 'short', 'bad', 'awful', 'horrible', 'stupid', 'retarded', 'drop', 'dropped', 'rip', 'put', 'red', 'dumping', 'dump', 'down', 'weak')
     ticker_set = get_nasdaq_tickers()
-    tickers = pd.DataFrame(columns = ('mentions', 'disposition'))
+    tickers = pd.DataFrame(columns = ('mentions', 'disposition', 'vader_positive', 'vader_negative', 'vader_neutral'))
     # Enter the url of daily discussion post
     submission = reddit.submission(url=url)
     print(submission.title)
@@ -52,10 +54,12 @@ def get_ticker_count(date, url):
         if counter == 1000:
             tickers = tickers.sort_values('mentions', ascending = False)
             return tickers
+        tickers_present = []
         #see if comment contains a ticker
         for word in comment.body.split():
             #if word is a valid ticker
             if word == word.upper() and word in ticker_set and word not in flagged_words:
+                tickers_present.append(word)
                 #if ticker not seen before
                 if word not in tickers.index.values:
                     #create new index for ticker
@@ -63,20 +67,44 @@ def get_ticker_count(date, url):
                     tickers.loc[word]['mentions'] = 1
                 else:
                     tickers.loc[word]['mentions'] += 1     
-                #grade disposition
-                disposition = 0
-                for _word in comment.body.split():
-                    if _word.lower() in positive_disposition:
-                        disposition += 1
-                    elif _word.lower() in negative_disposition:
-                        disposition -= 1
-                #if disposition not initialized
-                if tickers.loc[word]['disposition'] is np.nan:
-                    tickers.loc[word]['disposition'] = disposition
-                else:
-                    tickers.loc[word]['disposition'] += disposition
+        for ticker in tickers_present:
+            #grade disposition
+            disposition = 0
+            for _word in comment.body.split():
+                if _word.lower() in positive_disposition:
+                    disposition += 1
+                elif _word.lower() in negative_disposition:
+                    disposition -= 1
+            #if disposition not initialized
+            if tickers.loc[ticker]['disposition'] is np.nan:
+                tickers.loc[ticker]['disposition'] = disposition
+            else:
+                tickers.loc[ticker]['disposition'] += disposition
+            #vader disposition
+            scores = sia.polarity_scores(comment.body)
+            #if disposition not initialized
+            if tickers.loc[ticker]['vader_positive'] is np.nan:
+                tickers.loc[ticker]['vader_positive'] = scores['pos']
+            else:
+                tickers.loc[ticker]['vader_positive'] += scores['pos']
+                
+            if tickers.loc[ticker]['vader_negative'] is np.nan:
+                tickers.loc[ticker]['vader_negative'] = scores['neg']
+            else:
+                tickers.loc[ticker]['vader_negative'] += scores['neg']    
+                
+            if tickers.loc[ticker]['vader_neutral'] is np.nan:
+                tickers.loc[ticker]['vader_neutral'] = scores['neu']
+            else:
+                tickers.loc[ticker]['vader_neutral'] += scores['neu'] 
+
         counter += 1
     tickers = tickers.sort_values('mentions', ascending = False)
+    #adjust vader scores to percent
+    tickers.vader_positive = tickers.vader_positive/tickers.mentions
+    tickers.vader_negative = tickers.vader_negative/tickers.mentions
+    tickers.vader_neutral = tickers.vader_neutral/tickers.mentions
+
     return tickers
 
 def plot_ticker_count(tickers, date, save_file_dir):
@@ -91,14 +119,21 @@ def plot_ticker_count(tickers, date, save_file_dir):
     axs[0].set_ylabel('Times Mentioned')
     axs[0].set_xlim(xmin, xmax)
     
-    axs[1].grid(zorder = 0)
-    axs[1].bar(tickers.index.values, tickers['disposition'].values, zorder = 3)
+    x = np.arange(len(tickers.index.values))  # the label locations
+    width = 0.35  # the width of the bars
+    
+    # fig, ax = plt.subplots()
+    rects1 = axs[1].bar(x - width/2, tickers['vader_positive'].values, width, label='VADER Positive', zorder = 3)
+    rects2 = axs[1].bar(x + width/2, tickers['vader_negative'].values, width, label='VADER Negative', zorder = 3)
+    
+    axs[1].set_xticks(x)
+    axs[1].set_xticklabels(tickers.index.values)
+    axs[1].legend()
     axs[1].set_xticklabels(tickers.index.values, rotation = 90)
     axs[1].set_xlabel('Ticker')
     axs[1].set_ylabel('Disposition')
-    axs[1].hlines(0, xmin, xmax, color = 'k', lw = 3)
     axs[1].set_xlim(xmin, xmax)
-    
+    axs[1].grid(zorder = 0)
     save_path = save_file_dir / 'plots'
     save_path.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path / f'{date}_ticker_mentions.png', bbox_inches = 'tight')
@@ -140,7 +175,11 @@ def calc_change(tickers):
 def main():
     save_file_dir = pathlib.Path(os.getcwd(), 'Artifacts')
     save_file_dir.mkdir(parents=True, exist_ok=True)
-    pages = {20210217: r'https://www.reddit.com/r/wallstreetbets/comments/llrzit/daily_discussion_thread_for_february_17_2021/',
+    pages = {20210222: r'https://www.reddit.com/r/wallstreetbets/comments/lplby9/daily_discussion_thread_for_february_22_2021/',
+             20210220: r'https://www.reddit.com/r/wallstreetbets/comments/lnqdke/weekend_discussion_thread_for_the_weekend_of/',
+             20210219: r'https://www.reddit.com/r/wallstreetbets/comments/lnd8jo/daily_discussion_thread_for_february_19_2021/',
+             20210218: r'https://www.reddit.com/r/wallstreetbets/comments/lmk8bq/daily_discussion_thread_for_february_18_2021/',
+             20210217: r'https://www.reddit.com/r/wallstreetbets/comments/llrzit/daily_discussion_thread_for_february_17_2021/',
              20210216: r'https://www.reddit.com/r/wallstreetbets/comments/ll1ir4/daily_discussion_thread_for_february_16_2021/',
              20210212: r'https://www.reddit.com/r/wallstreetbets/comments/li8ul6/daily_discussion_thread_for_february_12_2021/',
              20210211: r'https://www.reddit.com/r/wallstreetbets/comments/lhifig/daily_discussion_thread_for_february_11_2021/',
