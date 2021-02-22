@@ -11,12 +11,12 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import datetime, timedelta
-
+import scipy.stats
 
 def main():
     save_path = pathlib.Path(os.getcwd()) / 'Artifacts' / 'exchange data'
     save_path.mkdir(parents=True, exist_ok=True)
-    exchange_data_path = pathlib.Path(os.getcwd()) / 'historical data' / 'P405L2QK.csv'
+    exchange_data_path = pathlib.Path(os.getcwd()) / 'historical data' / 'AIJJBGFG.csv'
     exchange_data = pd.read_csv(exchange_data_path, index_col = 'Date')
     reddit_data_dir = pathlib.Path(os.getcwd()) / 'Artifacts' / 'csv files'
     reddit_files = os.listdir(reddit_data_dir)
@@ -47,7 +47,7 @@ def main():
     #calc custom feature
     for i, (date, tickers) in enumerate(reddit_data.items()):
         tickers['custom'] = pd.Series()
-        tickers.loc[:, 'custom'] = tickers.loc[:, 'mentions'] * tickers.loc[:, 'disposition']
+        tickers.loc[:, 'custom'] = (tickers.loc[:, 'mentions'] * tickers.loc[:, 'vader_positive']) - (tickers.loc[:, 'mentions'] * tickers.loc[:, 'vader_negative'])
        
     #calc perceng change in price       
     for date, tickers in reddit_data.items():
@@ -82,7 +82,7 @@ def main():
         # save_path.mkdir(parents=True, exist_ok=True)
         # plt.savefig(save_path / f'{date}_price_change.png', bbox_inches = 'tight')
         # plt.close()
-        ###############################################################################
+        ################################plot rank change and price change###############################################
         # fig, axs = plt.subplots(2, figsize = (10, 10))
         # xmin = -0.5
         # xmax = len(tickers.index.values) - 0.5
@@ -93,6 +93,7 @@ def main():
         # # axs[0].set_xlabel('Ticker')
         # axs[0].set_ylabel('Mention Rank Change')
         # axs[0].set_xlim(xmin, xmax)
+        # axs[0].hlines(0, xmin, xmax, color = 'k', lw = 3)
         
         # axs[1].grid(zorder = 0)
         # axs[1].bar(tickers.index.values, tickers['percent change'].values, zorder = 3)
@@ -104,11 +105,10 @@ def main():
         
         # save_path.mkdir(parents=True, exist_ok=True)
         # plt.savefig(save_path / f'{date}_price_change.png', bbox_inches = 'tight')
-        plt.close()
+        # plt.close()
     
     
-    breakpoint
-    ##############################################
+    #####################plot custom vs price change same day#########################
     figure = plt.figure(figsize = (10, 10))
     plt.title('Custom Vs. Price change for same day')
     plt.xlabel('Custom')
@@ -117,10 +117,12 @@ def main():
     for date, tickers in reddit_data.items():
        plt.scatter(tickers['custom'], tickers['percent change'], label = date, zorder = 3)
     plt.xscale('log')
-    # plt.yscale('log')
     plt.legend()
     plt.grid(which="both", zorder = 0)
-    ####################################
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'custom_vs_price_change_same_day.png', bbox_inches = 'tight')
+    plt.close()
+    ###################plot custom vs price change next day#################
     figure = plt.figure(figsize = (10, 10))
     plt.title('custom Vs. Price change for next day')
     plt.xlabel('Rank change')
@@ -142,8 +144,11 @@ def main():
             plt.scatter(current_tickers['custom'], future_tickers['percent change'], label = date, zorder = 3)
     plt.xscale('log')
     plt.legend()
-    plt.grid(zorder = 0)
-    ############################################
+    plt.grid(which="both", zorder = 0)
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'custom_vs_price_change_next_day.png', bbox_inches = 'tight')
+    plt.close()
+    #####################plot rank change vs price change same day#######################
     figure = plt.figure(figsize = (10, 10))
     plt.title('Rank change Vs. Price change for same day')
     plt.xlabel('Rank change')
@@ -153,7 +158,10 @@ def main():
        plt.scatter(tickers['rank change'], tickers['percent change'], label = date, zorder = 3) 
     plt.legend()
     plt.grid(zorder = 0)
-    ####################################
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'rank_change_vs_price_change_same_day.png', bbox_inches = 'tight')
+    plt.close()
+    ######################plot rank change vs price change next day##############
     figure = plt.figure(figsize = (10, 10))
     plt.title('Rank change Vs. Price change for next day')
     plt.xlabel('Rank change')
@@ -175,6 +183,23 @@ def main():
             plt.scatter(current_tickers['rank change'], future_tickers['percent change'], label = date, zorder = 3) 
     plt.legend()
     plt.grid(zorder = 0)
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'rank_change_vs_price_change_next_day.png', bbox_inches = 'tight')
+    plt.close()
+    ################## plot corr matrix################################
+    corr = tickers.corr()
+    figure = plt.figure(figsize = (15, 15))
+    plt.matshow(corr, fignum=1)
+    plt.title('Correlation Matrix')
+    plt.xticks(range(tickers.select_dtypes(['number']).shape[1]), tickers.select_dtypes(['number']).columns, fontsize=14, rotation=45)
+    plt.yticks(range(tickers.select_dtypes(['number']).shape[1]), tickers.select_dtypes(['number']).columns, fontsize=14)
+    cb = plt.colorbar()
+    save_path.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path / f'corr_matrix.png', bbox_inches = 'tight')
+    plt.close()
+    #calculate correlation and p value of price
+    # corr, p = scipy.stats.pearsonr(tickers., y)
+    breakpoint()
     
 if __name__ == "__main__":
     main()
