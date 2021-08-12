@@ -33,9 +33,9 @@ def iter_top_level(comments):
 
 def get_ticker_count(date, url):
     sia = SentimentIntensityAnalyzer()
-    reddit = praw.Reddit(client_id = "bbHD9kqIv2nmLQ",
-                         client_secret = "vijXx26W5qgMyx2BbWA4tihwHjdIWg",
-                         user_agent = "windows:scraper:0.1 (by u/0x00000194)",
+    reddit = praw.Reddit(client_id = "REDACTED",
+                         client_secret = "REDACTED",
+                         user_agent = "windows:scraper:0.1 (by uREDACTED)",
                          check_for_async = False)
     
     # People may use use words that happen to be real ticker names
